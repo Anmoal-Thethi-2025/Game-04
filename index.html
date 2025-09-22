@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Context Commander</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f3e8ff, #d8b4fe);
+            color: #1e293b;
+        }
+        .container {
+            max-width: 800px;
+        }
+        .progress-bar {
+            transition: width 1s ease-in-out;
+            background: linear-gradient(90deg, #60a5fa, #3b82f6);
+        }
+        .progress-bar.overloaded {
+            background: linear-gradient(90deg, #f87171, #ef4444);
+            animation: shake 0.5s;
+            animation-iteration-count: 3;
+        }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div id="game-container" class="container bg-white rounded-2xl shadow-2xl p-8 space-y-8 max-w-lg mx-auto">
+        <!-- Introduction and Instructions -->
+        <div class="text-center space-y-4">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900"><i class="fas fa-brain text-purple-600 mr-2"></i>The Context Commander</h1>
+            <p class="text-gray-600 leading-relaxed">
+                This game illustrates the immense power of a large language model's context window. Your task is to load different information sources into your virtual context window to see how much data you can fit!
+            </p>
+            <p class="text-gray-600 leading-relaxed">
+                The point of this game is to help you visualize a complex technical concept in a simple, tangible way. It demonstrates how a large context window allows an AI model, like the one in NotebookLM, to process and understand vast amounts of information all at once, which is why it can answer questions and generate content based on your uploaded sources.
+            </p>
+            <p class="text-sm text-gray-500 italic">
+                <strong>Instructions:</strong> Select a scenario from the dropdown menu and press "Load Data". Watch the progress bar fill up as you add more and more information. The goal is to see how much you can fit before the bar breaks!
+            </p>
+        </div>
+
+        <!-- Game Interface -->
+        <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-lg">
+            <div class="mb-6">
+                <p class="text-lg font-semibold text-gray-700 mb-2">Context Window Capacity</p>
+                <div class="relative w-full h-8 bg-gray-200 rounded-full overflow-hidden">
+                    <div id="progressBar" class="progress-bar absolute top-0 left-0 h-full w-0 rounded-full transition-all duration-1000"></div>
+                </div>
+                <div class="flex justify-between text-sm font-medium mt-2 text-gray-600">
+                    <span id="currentWords">0 words</span>
+                    <span id="maxWords">/ 25,000,000 words</span>
+                </div>
+            </div>
+
+            <!-- Scenario Selection and Buttons -->
+            <div class="space-y-4">
+                <label for="scenarioSelect" class="block text-gray-700 font-semibold">Select a Scenario:</label>
+                <select id="scenarioSelect" class="w-full p-3 rounded-lg border border-gray-300 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                    <option value="" disabled selected>Choose a data source...</option>
+                    <option value="50000">A single research paper (50,000 words)</option>
+                    <option value="200000">A full-length novel (200,000 words)</option>
+                    <option value="1000000">Your entire project documentation (1 million words)</option>
+                    <option value="10000000">All annual reports from the last 5 years (10 million words)</option>
+                    <option value="25000000">An entire encyclopedia set (25 million words)</option>
+                    <option value="30000000">The complete works of Shakespeare (all plays & sonnets) (30 million words)</option>
+                </select>
+                <div class="flex space-x-4">
+                    <button id="loadButton" class="w-1/2 py-3 px-6 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 transform active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        <i class="fas fa-upload mr-2"></i>Load Data
+                    </button>
+                    <button id="resetButton" class="w-1/2 py-3 px-6 bg-gray-400 text-white font-bold rounded-lg shadow-md hover:bg-gray-500 transition-all duration-300 transform active:scale-95">
+                        <i class="fas fa-undo-alt mr-2"></i>Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Result Pop-up -->
+        <div id="resultModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden p-4">
+            <div class="bg-white rounded-xl shadow-2xl p-8 text-center max-w-sm w-full space-y-6 transform scale-95 opacity-0 transition-all duration-300 ease-out">
+                <h2 id="modalTitle" class="text-2xl font-bold text-gray-800"></h2>
+                <p id="modalMessage" class="text-gray-600 leading-relaxed"></p>
+                <button id="closeModal" class="w-full py-3 px-6 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 transform active:scale-95">
+                    Got it! <i class="fas fa-check ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const maxCapacity = 25000000;
+        let currentWords = 0;
+
+        const progressBar = document.getElementById('progressBar');
+        const currentWordsDisplay = document.getElementById('currentWords');
+        const scenarioSelect = document.getElementById('scenarioSelect');
+        const loadButton = document.getElementById('loadButton');
+        const resetButton = document.getElementById('resetButton');
+        const resultModal = document.getElementById('resultModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const closeModalButton = document.getElementById('closeModal');
+        const maxWordsDisplay = document.getElementById('maxWords');
+
+        // Function to format numbers with commas
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        // Update displays
+        function updateDisplay() {
+            const percentage = (currentWords / maxCapacity) * 100;
+            progressBar.style.width = `${Math.min(percentage, 100)}%`;
+            currentWordsDisplay.textContent = `${formatNumber(currentWords)} words`;
+            maxWordsDisplay.textContent = `/ ${formatNumber(maxCapacity)} words`;
+
+            if (currentWords > maxCapacity) {
+                progressBar.classList.add('overloaded');
+            } else {
+                progressBar.classList.remove('overloaded');
+            }
+        }
+
+        // Show the modal
+        function showModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            resultModal.classList.remove('hidden');
+            setTimeout(() => {
+                resultModal.firstElementChild.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
+
+        // Close the modal
+        function closeModal() {
+            resultModal.firstElementChild.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                resultModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Handle load button click
+        loadButton.addEventListener('click', () => {
+            const selectedValue = scenarioSelect.value;
+            if (!selectedValue) {
+                return;
+            }
+
+            const newWords = parseInt(selectedValue, 10);
+            currentWords += newWords;
+            updateDisplay();
+
+            if (currentWords > maxCapacity) {
+                showModal(
+                    "Context Window Overloaded!",
+                    `Whoops! That's too much. The total of ${formatNumber(currentWords)} words has exceeded your context window capacity. Try loading less data next time.`
+                );
+            } else {
+                showModal(
+                    "Success!",
+                    `The new data has been successfully loaded! Your context window now holds ${formatNumber(currentWords)} words.`
+                );
+            }
+            scenarioSelect.value = ''; // Reset dropdown
+        });
+
+        // Handle reset button click
+        resetButton.addEventListener('click', () => {
+            currentWords = 0;
+            updateDisplay();
+            showModal(
+                "Game Reset!",
+                "The context window has been cleared. Start loading new data now!"
+            );
+            scenarioSelect.value = ''; // Reset dropdown
+        });
+
+        closeModalButton.addEventListener('click', closeModal);
+
+        // Initial display update
+        window.onload = updateDisplay;
+
+    </script>
+</body>
+</html>
